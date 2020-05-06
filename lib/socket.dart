@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_socket_demo/db.dart';
+import 'package:flutter_socket_demo/helper.dart';
 import 'package:flutter_socket_io/flutter_socket_io.dart';
-import 'package:flutter_socket_io/socket_io_manager.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class SocketPage extends StatefulWidget {
   @override
@@ -11,10 +13,14 @@ class SocketPage extends StatefulWidget {
 
 class _SocketPageState extends State<SocketPage> {
   SocketIO socketIO;
+  IO.Socket socket;
   List<String> messages;
   double height, width;
   TextEditingController textController;
   ScrollController scrollController;
+  final DBManager dbmanager = new DBManager();
+  bool isConnected = false;
+  var response;
 
   @override
   void initState() {
@@ -23,28 +29,89 @@ class _SocketPageState extends State<SocketPage> {
     //Initializing the TextEditingController and ScrollController
     textController = TextEditingController();
     scrollController = ScrollController();
-    //Creating the socket
-    socketIO = SocketIOManager().createSocketIO(
-      'https://437e35ed.ngrok.io',
-      '/',
-      socketStatusCallback: _socketStatus,
-    );
-    //Call init before doing anything with socket
-    socketIO.init();
-    //Subscribe to an event to listen to
-    socketIO.subscribe('receive_message', (msg) {
-      print(msg);
-    });
-    //Connect to the socket
-    socketIO.connect();
-    
-    socketIO.sendMessage('chat_message', json.encode({'message': 'kmank'}));
+    _connectSocket02();
     super.initState();
   }
 
-  _socketStatus(dynamic data) {
-    print("Socket status: " + data);
+  // _socketStatus(dynamic data) {
+  //   print("Socket status: " + data);
+  //   if (data == 'connect') {
+  //     setState(() {
+  //       isConnected = true;
+  //       _reconnectSocket();
+  //     });
+  //   } else {
+  //     setState(() {
+  //       isConnected = false;
+  //     });
+  //     print(isConnected);
+  //   }
+  // }
+
+  // _messageSentStatus(dynamic data) async {
+  //   print("Message Sent Status: " + data);
+  // }
+
+  // _connectSocket01() {
+  //   //Creating the socket
+  //   socketIO = SocketIOManager().createSocketIO(
+  //     'https://e890ed14.ngrok.io',
+  //     '/',
+  //     socketStatusCallback: _socketStatus,
+  //   );
+  //   //Call init before doing anything with socket
+  //   socketIO.init();
+  //   //Subscribe to an event to listen to
+  //   socketIO.subscribe('receive_message', (msg) async {
+  //     print(msg);
+  //     var allRows = await dbmanager.getAllRows();
+  //     for (var item in allRows) {
+  //       int rowId = item.id;
+  //       var message = item.message;
+  //       var timeStamp = item.timeStamp;
+  //       dbmanager
+  //           .updateSocketData(rowId, message, 'send', timeStamp)
+  //           .then((id) {
+  //         print('socket  updated  to Db {$id}');
+  //       });
+  //     }
+  //   });
+  //   //Connect to the socket
+  //   socketIO.connect();
+  // }
+
+  _connectSocket02() {
+    socket = IO.io('https://e890ed14.ngrok.io/', <String, dynamic>{
+      'transports': ['websocket'],
+      'extraHeaders': {
+        'Authorization':
+            'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVkZjFiZDE1NjIyMzZlMGNjNmFhMGM1ZSIsInVzZXIiOnsiX2lkIjoiNWRmMWJkMTU2MjIzNmUwY2M2YWEwYzVlIiwicGFzc3dvcmQiOiIkMmEkMTAkUDRDVzVWaHRNQzNEVFJjNmQ2Tm0uT3pVZmxXR3h5THJHMUEyai9jLjJiM01uRFk3NTZJWHEifSwiaWF0IjoxNTg3NzIyNzUxLCJleHAiOjE1ODc4OTU1NTF9.Xt-PwBZsPIjV8ycsoKLnrGLOCFJAtZHiTYglFtTHN-4'
+      }
+    });
+    socket.connect();
+
+    socket.on('connect', (_) {
+      print('connect');
+    });
+    socket.on('catch', (data) => print(data));
+    socket.on('disconnect', (_) => print('disconnect'));
+    socket.on('fromServer', (response) => response);
   }
+
+  // _reconnectSocket() {
+  //   // if (socketIO == null) {
+  //   //   _connectSocket01();
+  //   // } else {
+  //   //   socketIO.connect();
+  //   var msg = SharedPreferencesHelper.getMessage();
+  //   socketIO.sendMessage(
+  //     'chat_message',
+  //     json.encode({
+  //       'message': msg,
+  //     }),
+  //   );
+  //   // }
+  // }
 
   Widget buildSingleMessage(int index) {
     return Container(
@@ -99,8 +166,37 @@ class _SocketPageState extends State<SocketPage> {
         //Check if the textfield has text or not
         if (textController.text.isNotEmpty) {
           //Send the message as JSON data to send_message event
-          socketIO.sendMessage('chat_message', json.encode({'message': textController.text}));
-          _socketStatus(textController.text);
+          SocketData initSocketData = new SocketData(
+            status: 'unsend',
+            timeStamp: DateTime.now().toIso8601String(),
+            message: textController.text,
+          );
+          dbmanager.insertForm(initSocketData).then(
+            (id) {
+              print(
+                'intiSocketData Added to Db {$id}',
+              );
+            },
+          );
+          // if (isConnected) {
+          //   socketIO.sendMessage(
+          //       'check',
+          //       json.encode({'message': textController.text}),
+          //       _messageSentStatus);
+          // } else {
+          //   SharedPreferencesHelper.setMessage(textController.text);
+          // }
+
+          socket.emitWithAck('check', {'message': textController.text},
+              ack: (data) {
+            print('ack $data');
+            if (data != null) {
+              print('from server $data');
+            } else {
+              print("Null");
+            }
+          });
+          print(isConnected);
           //Add the message to the list
           this.setState(() => messages.add(textController.text));
           textController.text = '';
