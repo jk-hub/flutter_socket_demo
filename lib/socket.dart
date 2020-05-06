@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:connectivity/connectivity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_socket_demo/db.dart';
 import 'package:flutter_socket_demo/helper.dart';
@@ -21,9 +23,21 @@ class _SocketPageState extends State<SocketPage> {
   final DBManager dbmanager = new DBManager();
   bool isConnected = false;
   var response;
+  var _connectionStatus = 'Unknown';
+  Connectivity connectivity;
+  StreamSubscription<ConnectivityResult> subscription;
 
   @override
   void initState() {
+    connectivity = new Connectivity();
+    subscription =
+        connectivity.onConnectivityChanged.listen((ConnectivityResult result) {
+      _connectionStatus = result.toString();
+      print(_connectionStatus);
+      if (result == ConnectivityResult.wifi ||
+          result == ConnectivityResult.mobile) {
+      } else {}
+    });
     //Initializing the message list
     messages = List<String>();
     //Initializing the TextEditingController and ScrollController
@@ -81,21 +95,24 @@ class _SocketPageState extends State<SocketPage> {
   // }
 
   _connectSocket02() {
-    socket = IO.io('https://e890ed14.ngrok.io/', <String, dynamic>{
-      'transports': ['websocket'],
-      'extraHeaders': {
-        'Authorization':
-            'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVkZjFiZDE1NjIyMzZlMGNjNmFhMGM1ZSIsInVzZXIiOnsiX2lkIjoiNWRmMWJkMTU2MjIzNmUwY2M2YWEwYzVlIiwicGFzc3dvcmQiOiIkMmEkMTAkUDRDVzVWaHRNQzNEVFJjNmQ2Tm0uT3pVZmxXR3h5THJHMUEyai9jLjJiM01uRFk3NTZJWHEifSwiaWF0IjoxNTg3NzIyNzUxLCJleHAiOjE1ODc4OTU1NTF9.Xt-PwBZsPIjV8ycsoKLnrGLOCFJAtZHiTYglFtTHN-4'
-      }
-    });
+    socket = IO.io(
+      'https://7524cff7.ngrok.io/',
+      <String, dynamic>{
+        'transports': ['websocket'],
+        'query': {
+          'token':
+              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjVkZjFjOWJhNjIyMzZlMGNjNmFhMGM2MiIsInVzZXIiOnsiX2lkIjoiNWRmMWM5YmE2MjIzNmUwY2M2YWEwYzYyIiwicGFzc3dvcmQiOiIkMmEkMTAkdS5CcTJ6QkJvbTJQTXk0VW9ENjhET2lIaU4xOWl1UmRQcVpSbTJ6TnVlWVFjYXUvWncvVmkifSwiaWF0IjoxNTg4NzQ1NTk3LCJleHAiOjE1ODg5MTgzOTd9.pLH-D_18ZJkbyFNMwMvX95y1bTxbz8wHuChS2G3T-Iw'
+        }
+      },
+    );
     socket.connect();
 
     socket.on('connect', (_) {
       print('connect');
     });
-    socket.on('catch', (data) => print(data));
+    socket.on('catch_v', (data) => print('catch_v ---- $data'));
     socket.on('disconnect', (_) => print('disconnect'));
-    socket.on('fromServer', (response) => response);
+    // socket.on('fromServer', (response) => response);
   }
 
   // _reconnectSocket() {
@@ -187,15 +204,17 @@ class _SocketPageState extends State<SocketPage> {
           //   SharedPreferencesHelper.setMessage(textController.text);
           // }
 
-          socket.emitWithAck('check', {'message': textController.text},
-              ack: (data) {
-            print('ack $data');
-            if (data != null) {
-              print('from server $data');
-            } else {
-              print("Null");
-            }
-          });
+          socket.emit(
+            'check_v', {'check_v ---message': textController.text},
+            //   ack: (data) {
+            // print('ack $data');
+            // if (data != null) {
+            //   print('from server $data');
+            // } else {
+            //   print("Null");
+            // }
+            // }
+          );
           print(isConnected);
           //Add the message to the list
           this.setState(() => messages.add(textController.text));
